@@ -25,7 +25,8 @@ class W4Linear(nn.Module):
 
     def __init__(self, linear: nn.Linear):
         super().__init__()
-        w = linear.weight.detach().to(torch.float16).cuda()
+        # Linear.weight is (out, in); we store (K=in, N=out) for x @ W.
+        w = linear.weight.detach().to(torch.float16).cuda().T.contiguous()
         packed, scales = pack_weights(w)
         self.register_buffer("packed", packed)
         self.register_buffer("scales", scales)
