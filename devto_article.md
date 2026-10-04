@@ -1,3 +1,5 @@
+![Roofline-First Decoding results](https://raw.githubusercontent.com/raihan-js/roofline-decoding/HEAD/images/roofline.png)
+
 # My Triton Kernel Ties bitsandbytes — and Both Lose to Math
 
 *A fused W4A16 GEMV for batch-1 decoding, measured against the RTX 3060 roofline.*
@@ -8,7 +10,7 @@
 
 ## The roofline first
 
-Batch-1 decoding is memory-bandwidth bound: each token reads every weight byte once. So the ceiling is bandwidth divided by weight bytes — worked out before any code.
+Batch-1 decoding is memory-bandwidth bound: each token reads every weight byte once. So the ceiling is bandwidth divided by the bytes read per token (weights plus a 2,048-token KV-cache read) — worked out before any code.
 
 Measured (torch copy benchmark, not the spec sheet): **323.9 GB/s** (spec: 360).
 
@@ -51,6 +53,8 @@ My kernel ties bitsandbytes on speed with better perplexity. And both lose to bf
 Per-layer breakdown: GEMV time sums to ~25ms of the ~39ms step — the rest is attention, norms, sampling, and Python dispatch. Within GEMV time, the scalar nibble-unpack loop (shift, mask, subtract, scale per element) dominates: ~6 ALU ops per MAC with no pipelining. Marlin hides exactly this with async copies, software pipelining, and ahead-of-time bit staging. A `tl.dot` rewrite was attempted and measured **4–7× slower** — the dequant-scatter into the dot tile cost more than the dot saved. Negative results reported as such.
 
 The int4 ceiling (412 tok/s) sits 16× above measured. That gap — dequant arithmetic, launch overhead on small shapes, dispatch — is the project.
+
+A fairer denominator, since I owe you one: the 412 tok/s ceiling assumes *every* weight is int4, including the tied embedding / lm_head. In the swapped model that matrix stays bf16, so each token reads 1.263 GB of weights (plus ~0.06 GB of KV cache). Against the bytes actually moved, 25.5 tok/s is ~34 GB/s, about 10% of measured bandwidth, and the model's own ceiling is ~245 tok/s: a ~9.6× gap rather than 16×. Both are in the results files; the 6.1% headline is relative to the all-int4 ideal.
 
 ## Limitations
 
