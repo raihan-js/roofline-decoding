@@ -33,6 +33,8 @@ Three versions, all correctness-tested against a PyTorch reference on the models
 - **v2** (fused): one kernel, dequantise on the fly, no materialisation.
 - **v3** (split-K + tuned): autotuned tiles, split-K parallelism for large matrices.
 
+Per-shape microbenchmarks (in the repo) hold one more surprise: v3 is not faster than v2 on any of the five shapes I measured (v2 is 1.0–1.4× faster), yet end-to-end decoding uses v3. The fused kernel itself is up to 5.5× faster than a pre-dequantised reference on the wide MLP-gate shape; swapping v2 into the decode loop is the obvious next experiment.
+
 Two bugs found along the way, both load-bearing:
 
 1. **Missing +8 zero-point** in packing — every positive weight destroyed. Caught by review before first GPU run.

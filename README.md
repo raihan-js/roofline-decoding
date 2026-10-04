@@ -42,6 +42,18 @@ Two bugs found along the way, both load-bearing:
 1. **Missing +8 zero-point** in packing: every positive weight destroyed. Caught in review before the first GPU run.
 2. **`@triton.autotune` vs `atomic_add`**: autotune times all configs against the same output buffer, and a split-K kernel accumulates into it, so the buffer holds ~500 stale copies before the real launch. Fixed with explicit tuning.
 
+### Kernel microbenchmarks (per layer shape, ms; lower is better)
+
+| Shape (K x N) | Reference (fp16 weights) | v1 dequantise+matmul | v2 fused | v3 tuned / split-K |
+|---|---|---|---|---|
+| Qwen q-proj 1536 x 1536 | 0.092 | 0.203 | **0.049** | 0.053 |
+| Qwen MLP gate 1536 x 8960 | 0.458 | 0.601 | **0.084** | 0.120 |
+| Qwen MLP down 8960 x 1536 | 0.450 | 1.064 | **0.428** | 0.438 |
+| ORCH attention 1024 x 1024 | 0.039 | 0.112 | **0.029** | 0.033 |
+| ORCH MLP 1024 x 2816 | 0.103 | 0.178 | **0.029** | 0.035 |
+
+The fused kernel (v2) is up to 5.5x faster than the reference on the wide MLP-gate shape, but **v3 is not faster than v2 on any of the five shapes** (v2 is 1.0-1.4x faster). End-to-end decoding uses v3, so swapping in v2 is a cheap follow-up experiment. The down-projection shape (tall K) barely beats the reference, which is part of why the end-to-end gain is small.
+
 ## Why 6-10% and not more
 
 Per-layer breakdown: GEMV time is ~25 ms of the ~39 ms step; the rest is attention, norms, sampling and Python dispatch. Inside the GEMV the scalar nibble-unpack loop (shift, mask, subtract, scale per element, ~6 ALU ops per MAC, no pipelining) dominates. Marlin hides exactly this with async copies and software pipelining. A `tl.dot` rewrite was attempted and measured **4-7× slower**.
