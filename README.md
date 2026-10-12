@@ -4,6 +4,8 @@ A fused 4-bit-weight dequantise-plus-GEMV Triton kernel for batch-1 LLM decoding
 
 ![Roofline-First Decoding results](images/roofline.png)
 
+Write-up: [My Triton Kernel Ties bitsandbytes — and Both Lose to Math](https://dev.to/raihan-js/my-triton-kernel-ties-bitsandbytes-and-both-lose-to-math-2bie)
+
 ## The idea
 
 Batch-1 decoding is memory-bandwidth bound: each token reads every weight byte once. So the ceiling on tokens/s is bandwidth divided by the bytes read per token, worked out before any code. Then: write the kernel, profile it, and explain with evidence how far each approach is from the physical limit and why.
